@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: karmaq
+  datasource:
+    url: jdbc:postgresql://localhost:5432/karmaq
+    username: karmaq
+    password: karmaq
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+
+karmaq:
+  worker:
+    pool-size: 4
+    poll-interval-ms: 1000
+    lease-duration-seconds: 30
