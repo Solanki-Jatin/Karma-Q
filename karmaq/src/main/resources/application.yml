@@ -30,3 +30,4 @@ karmaq:
     pool-size: 4
     poll-interval-ms: 1000
     lease-duration-seconds: 30
+    batch-size: 10
