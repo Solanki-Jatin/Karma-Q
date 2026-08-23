@@ -48,6 +48,7 @@ public class ConcurrentJobExecutor {
 
     private final JobRepository jobRepository;
     private final JobHandlerRegistry handlerRegistry;
+    private final CronScheduler cronScheduler;
     private final ExecutorService jobWorkerPool;
     private final int leaseDurationSeconds;
     private final int batchSize;
@@ -55,12 +56,14 @@ public class ConcurrentJobExecutor {
     public ConcurrentJobExecutor(
             JobRepository jobRepository,
             JobHandlerRegistry handlerRegistry,
+            CronScheduler cronScheduler,
             ExecutorService jobWorkerPool,
             @Value("${karmaq.worker.lease-duration-seconds:30}") int leaseDurationSeconds,
             @Value("${karmaq.worker.batch-size:10}") int batchSize
     ) {
         this.jobRepository = jobRepository;
         this.handlerRegistry = handlerRegistry;
+        this.cronScheduler = cronScheduler;
         this.jobWorkerPool = jobWorkerPool;
         this.leaseDurationSeconds = leaseDurationSeconds;
         this.batchSize = batchSize;
@@ -100,7 +103,15 @@ public class ConcurrentJobExecutor {
 
         try {
             handler.get().handle(job);
-            job.setStatus(JobStatus.SUCCEEDED);
+            if (job.getCronExpression() != null) {
+                // Recurring job: compute the next fire time and go back to
+                // PENDING instead of SUCCEEDED - it never "finishes".
+                job.setStatus(JobStatus.PENDING);
+                job.setRunAt(cronScheduler.nextFireTime(job.getCronExpression()));
+                job.setAttemptCount(0);
+            } else {
+                job.setStatus(JobStatus.SUCCEEDED);
+            }
             jobRepository.save(job);
         } catch (Exception e) {
             handleFailure(job, e);
