@@ -2,6 +2,7 @@ package com.karmaq.job;
 
 import com.karmaq.api.dto.CreateJobRequest;
 import com.karmaq.repository.JobRepository;
+import com.karmaq.worker.CronScheduler;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -21,9 +22,11 @@ import java.util.UUID;
 public class JobService {
 
     private final JobRepository jobRepository;
+    private final CronScheduler cronScheduler;
 
-    public JobService(JobRepository jobRepository) {
+    public JobService(JobRepository jobRepository, CronScheduler cronScheduler) {
         this.jobRepository = jobRepository;
+        this.cronScheduler = cronScheduler;
     }
 
     public Job createJob(CreateJobRequest request) {
@@ -31,10 +34,11 @@ public class JobService {
             throw new IllegalArgumentException("Either runAt or cronExpression must be provided");
         }
 
-        // For now: one-time jobs use the given runAt as-is. Cron parsing
-        // (computing the next fire time from an expression) is Week 2 work -
-        // today we just accept the field and store it.
-        Instant runAt = request.runAt() != null ? request.runAt() : Instant.now();
+        // Recurring jobs: compute the first fire time from the cron
+        // expression. One-time jobs: use the given runAt as-is.
+        Instant runAt = request.cronExpression() != null
+                ? cronScheduler.nextFireTime(request.cronExpression())
+                : request.runAt();
 
         Job job = Job.builder()
                 .type(request.type())
