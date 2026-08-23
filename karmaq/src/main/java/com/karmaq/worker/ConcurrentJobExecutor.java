@@ -101,10 +101,35 @@ public class ConcurrentJobExecutor {
         try {
             handler.get().handle(job);
             job.setStatus(JobStatus.SUCCEEDED);
+            jobRepository.save(job);
         } catch (Exception e) {
-            job.setStatus(JobStatus.FAILED);
-            job.setLastError(e.getMessage());
-            log.error("Job {} failed on {}", job.getId(), workerId, e);
+            handleFailure(job, e);
+        }
+    }
+
+    /**
+     * On failure: increment the attempt count, then either reschedule with
+     * exponential backoff (1m, 2m, 4m, 8m, ...) or, once maxAttempts is
+     * exhausted, park the job in DEAD_LETTER for manual inspection.
+     *
+     * Rescheduling sets status back to PENDING with a future runAt - the
+     * SAME claim query picks it back up naturally next time it's due, no
+     * separate retry mechanism needed.
+     */
+    private void handleFailure(Job job, Exception e) {
+        job.setAttemptCount(job.getAttemptCount() + 1);
+        job.setLastError(e.getMessage());
+
+        if (job.getAttemptCount() >= job.getMaxAttempts()) {
+            job.setStatus(JobStatus.DEAD_LETTER);
+            log.error("Job {} exhausted {} attempts, moving to DEAD_LETTER",
+                    job.getId(), job.getMaxAttempts(), e);
+        } else {
+            long backoffSeconds = (long) Math.pow(2, job.getAttemptCount()) * 30;
+            job.setStatus(JobStatus.PENDING);
+            job.setRunAt(Instant.now().plusSeconds(backoffSeconds));
+            log.warn("Job {} failed (attempt {}/{}), retrying in {}s",
+                    job.getId(), job.getAttemptCount(), job.getMaxAttempts(), backoffSeconds, e);
         }
 
         jobRepository.save(job);
