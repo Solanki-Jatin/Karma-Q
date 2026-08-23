@@ -30,6 +30,8 @@ class ConcurrentJobExecutorRetryTest {
     @Mock
     private JobHandlerRegistry handlerRegistry;
     @Mock
+    private CronScheduler cronScheduler;
+    @Mock
     private ExecutorService jobWorkerPool;
 
     @Test
@@ -68,7 +70,7 @@ class ConcurrentJobExecutorRetryTest {
 
     private Job invokeHandleFailure(Job job, Exception failure) throws Exception {
         ConcurrentJobExecutor executor = new ConcurrentJobExecutor(
-                jobRepository, handlerRegistry, jobWorkerPool, 30, 10);
+                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, 30, 10);
         Method method = ConcurrentJobExecutor.class
                 .getDeclaredMethod("handleFailure", Job.class, Exception.class);
         method.setAccessible(true);

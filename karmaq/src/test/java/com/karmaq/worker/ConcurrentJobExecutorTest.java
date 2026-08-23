@@ -38,6 +38,8 @@ class ConcurrentJobExecutorTest {
     @Mock
     private JobHandlerRegistry handlerRegistry;
     @Mock
+    private CronScheduler cronScheduler;
+    @Mock
     private ExecutorService jobWorkerPool;
 
     @Test
@@ -53,7 +55,7 @@ class ConcurrentJobExecutorTest {
         when(jobRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ConcurrentJobExecutor executor = new ConcurrentJobExecutor(
-                jobRepository, handlerRegistry, jobWorkerPool, 30, 10);
+                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, 30, 10);
 
         List<Job> claimed = executor.claimDueJobs();
 
