@@ -3,6 +3,7 @@ package com.karmaq.worker;
 import com.karmaq.job.Job;
 import com.karmaq.job.JobStatus;
 import com.karmaq.repository.JobRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -55,7 +56,7 @@ class ConcurrentJobExecutorTest {
         when(jobRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
         ConcurrentJobExecutor executor = new ConcurrentJobExecutor(
-                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, 30, 10);
+                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, new SimpleMeterRegistry(), 30, 10);
 
         List<Job> claimed = executor.claimDueJobs();
 

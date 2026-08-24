@@ -3,6 +3,7 @@ package com.karmaq.worker;
 import com.karmaq.job.Job;
 import com.karmaq.job.JobStatus;
 import com.karmaq.repository.JobRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -70,7 +71,7 @@ class ConcurrentJobExecutorRetryTest {
 
     private Job invokeHandleFailure(Job job, Exception failure) throws Exception {
         ConcurrentJobExecutor executor = new ConcurrentJobExecutor(
-                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, 30, 10);
+                jobRepository, handlerRegistry, cronScheduler, jobWorkerPool, new SimpleMeterRegistry(), 30, 10);
         Method method = ConcurrentJobExecutor.class
                 .getDeclaredMethod("handleFailure", Job.class, Exception.class);
         method.setAccessible(true);
