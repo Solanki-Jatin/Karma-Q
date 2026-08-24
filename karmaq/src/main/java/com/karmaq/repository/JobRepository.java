@@ -1,6 +1,7 @@
 package com.karmaq.repository;
 
 import com.karmaq.job.Job;
+import com.karmaq.job.JobStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -9,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface JobRepository extends JpaRepository<Job, UUID> {
@@ -40,4 +42,10 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
             @Param("leaseExpiry") Instant leaseExpiry,
             @Param("batchSize") int batchSize
     );
+
+    /** Used by JobService to enforce idempotency on job creation. */
+    Optional<Job> findByIdempotencyKey(String idempotencyKey);
+
+    /** Used by metrics to report current queue depth per status. */
+    long countByStatus(JobStatus status);
 }

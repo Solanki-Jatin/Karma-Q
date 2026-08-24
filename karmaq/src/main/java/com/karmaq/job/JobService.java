@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -32,6 +33,16 @@ public class JobService {
     public Job createJob(CreateJobRequest request) {
         if (request.runAt() == null && request.cronExpression() == null) {
             throw new IllegalArgumentException("Either runAt or cronExpression must be provided");
+        }
+
+        // Idempotency: if a client retries a submission with the same key
+        // (e.g. after a network timeout, unsure whether the first request
+        // landed), return the existing job instead of creating a duplicate.
+        if (request.idempotencyKey() != null) {
+            Optional<Job> existing = jobRepository.findByIdempotencyKey(request.idempotencyKey());
+            if (existing.isPresent()) {
+                return existing.get();
+            }
         }
 
         // Recurring jobs: compute the first fire time from the cron
