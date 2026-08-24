@@ -65,4 +65,18 @@ class JobServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("IN_PROGRESS");
     }
+
+    @Test
+    void createJob_returnsExistingJobForDuplicateIdempotencyKey() {
+        JobService service = new JobService(jobRepository, cronScheduler);
+        Job existing = Job.builder().type("log-message").status(JobStatus.SUCCEEDED).build();
+        when(jobRepository.findByIdempotencyKey("key-123")).thenReturn(Optional.of(existing));
+
+        CreateJobRequest request = new CreateJobRequest(
+                "log-message", "hi", Instant.now(), null, "key-123");
+
+        Job result = service.createJob(request);
+
+        assertThat(result).isSameAs(existing);
+    }
 }
