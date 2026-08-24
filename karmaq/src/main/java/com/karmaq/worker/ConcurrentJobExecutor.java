@@ -3,6 +3,8 @@ package com.karmaq.worker;
 import com.karmaq.job.Job;
 import com.karmaq.job.JobStatus;
 import com.karmaq.repository.JobRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,11 +55,18 @@ public class ConcurrentJobExecutor {
     private final int leaseDurationSeconds;
     private final int batchSize;
 
+    private final Counter jobsExecutedCounter;
+    private final Counter jobsSucceededCounter;
+    private final Counter jobsFailedCounter;
+    private final Counter jobsRetriedCounter;
+    private final Counter jobsDeadLetteredCounter;
+
     public ConcurrentJobExecutor(
             JobRepository jobRepository,
             JobHandlerRegistry handlerRegistry,
             CronScheduler cronScheduler,
             ExecutorService jobWorkerPool,
+            MeterRegistry meterRegistry,
             @Value("${karmaq.worker.lease-duration-seconds:30}") int leaseDurationSeconds,
             @Value("${karmaq.worker.batch-size:10}") int batchSize
     ) {
@@ -67,6 +76,12 @@ public class ConcurrentJobExecutor {
         this.jobWorkerPool = jobWorkerPool;
         this.leaseDurationSeconds = leaseDurationSeconds;
         this.batchSize = batchSize;
+
+        this.jobsExecutedCounter = meterRegistry.counter("karmaq.jobs.executed");
+        this.jobsSucceededCounter = meterRegistry.counter("karmaq.jobs.succeeded");
+        this.jobsFailedCounter = meterRegistry.counter("karmaq.jobs.failed");
+        this.jobsRetriedCounter = meterRegistry.counter("karmaq.jobs.retried");
+        this.jobsDeadLetteredCounter = meterRegistry.counter("karmaq.jobs.dead_letter");
     }
 
     @Scheduled(fixedDelayString = "${karmaq.worker.poll-interval-ms:1000}")
@@ -92,11 +107,14 @@ public class ConcurrentJobExecutor {
     }
 
     private void execute(Job job) {
+        jobsExecutedCounter.increment();
+
         var handler = handlerRegistry.find(job.getType());
         if (handler.isEmpty()) {
             job.setStatus(JobStatus.FAILED);
             job.setLastError("No handler registered for type: " + job.getType());
             jobRepository.save(job);
+            jobsFailedCounter.increment();
             log.warn("No handler for job {} of type {}", job.getId(), job.getType());
             return;
         }
@@ -112,6 +130,7 @@ public class ConcurrentJobExecutor {
             } else {
                 job.setStatus(JobStatus.SUCCEEDED);
             }
+            jobsSucceededCounter.increment();
             jobRepository.save(job);
         } catch (Exception e) {
             handleFailure(job, e);
@@ -133,12 +152,14 @@ public class ConcurrentJobExecutor {
 
         if (job.getAttemptCount() >= job.getMaxAttempts()) {
             job.setStatus(JobStatus.DEAD_LETTER);
+            jobsDeadLetteredCounter.increment();
             log.error("Job {} exhausted {} attempts, moving to DEAD_LETTER",
                     job.getId(), job.getMaxAttempts(), e);
         } else {
             long backoffSeconds = (long) Math.pow(2, job.getAttemptCount()) * 30;
             job.setStatus(JobStatus.PENDING);
             job.setRunAt(Instant.now().plusSeconds(backoffSeconds));
+            jobsRetriedCounter.increment();
             log.warn("Job {} failed (attempt {}/{}), retrying in {}s",
                     job.getId(), job.getAttemptCount(), job.getMaxAttempts(), backoffSeconds, e);
         }
