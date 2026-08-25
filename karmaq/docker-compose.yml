@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: karmaq
+      POSTGRES_USER: karmaq
+      POSTGRES_PASSWORD: karmaq
+    ports:
+      - "5432:5432"
+    volumes:
+      - karmaq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karmaq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  karmaq:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/karmaq
+      SPRING_DATASOURCE_USERNAME: karmaq
+      SPRING_DATASOURCE_PASSWORD: karmaq
+    ports:
+      - "8080:8080"
+
+volumes:
+  karmaq-pgdata:
